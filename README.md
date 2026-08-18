@@ -185,8 +185,12 @@ the Function in Frankfurt (`fra1`) next to the recommended database region.
   production frontend origin to send `PUT` requests with the `Content-Type`
   header.
 - Use stable custom domains where possible, for example `app.example.com` for
-  the frontend and `api.example.com` for this API. This keeps the current
-  `SameSite=Lax` authentication cookie working across the two subdomains.
+  the frontend and `api.example.com` for this API. Production auth cookies use
+  `SameSite=None; Secure`, which also supports separate Vercel project domains.
+  Custom domains are still preferred because browsers and privacy extensions
+  may block third-party cookies between unrelated sites.
+- Configure the frontend HTTP client to include credentials in API requests
+  (`credentials: 'include'` for `fetch` or `withCredentials: true` for Axios).
 
 ### 2. Configure Vercel environment variables
 

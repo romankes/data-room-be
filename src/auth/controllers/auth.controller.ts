@@ -120,11 +120,16 @@ export class AuthController {
   }
 
   private getCookieOptions(): CookieOptions {
+    const isProduction = process.env.NODE_ENV === 'production';
+
     return {
       httpOnly: true,
       path: '/',
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      // Separate Vercel projects are cross-site even though both use
+      // `vercel.app`, so production cookies must explicitly allow cross-site
+      // requests. `SameSite=None` is only accepted together with `Secure`.
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
     };
   }
 }
