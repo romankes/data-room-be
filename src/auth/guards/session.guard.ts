@@ -8,8 +8,9 @@ import {
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
-import { UsersService } from 'src/auth/services/users.service';
+import { UsersService } from '../services/users.service';
 import { JwtService } from '../services/jwt.service';
+import { ACCESS_TOKEN_COOKIE } from '../auth.constants';
 
 export const EXTRACTED_USER_KEY = 'extractedUser' as const;
 
@@ -35,7 +36,7 @@ export class SessionGuard implements CanActivate {
       return true;
     }
 
-    const token = this.extractBearerToken(request);
+    const token = this.extractSessionToken(request);
 
     if (!token) {
       throw new UnauthorizedException('Token is not valid');
@@ -65,9 +66,26 @@ export class SessionGuard implements CanActivate {
     return true;
   }
 
-  private extractBearerToken(request: Request): string | null {
+  private extractSessionToken(request: Request): string | null {
     const auth = request.headers['authorization'];
 
-    return auth?.startsWith('Bearer ') ? auth.slice(7) : null;
+    if (auth?.startsWith('Bearer ')) {
+      return auth.slice(7);
+    }
+
+    return this.extractCookieToken(request.headers.cookie);
+  }
+
+  private extractCookieToken(cookieHeader?: string): string | null {
+    const cookie = cookieHeader
+      ?.split(';')
+      .map((value) => value.trim())
+      .find((value) => value.startsWith(`${ACCESS_TOKEN_COOKIE}=`));
+
+    if (!cookie) {
+      return null;
+    }
+
+    return cookie.slice(ACCESS_TOKEN_COOKIE.length + 1);
   }
 }

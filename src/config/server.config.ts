@@ -15,6 +15,8 @@ export const ServerConfigFactory = registerAs(
     port: parseInt(process.env.PORT || '3002', 10),
     corsOrigins: process.env.CORS_ALLOWED_ORIGINS
       ? process.env.CORS_ALLOWED_ORIGINS.split(',')
+          .map((origin) => origin.trim())
+          .filter(Boolean)
       : ['http://localhost:3000'],
   }),
 );

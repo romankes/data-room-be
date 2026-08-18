@@ -14,6 +14,7 @@ import { UserEntity } from 'src/auth/entities/user.entity';
 import { ExtractUser } from 'src/auth/decorators/extract-user.decorator';
 import { FoldersCreateDto } from '../dtos/folders-create.dto';
 import { FoldersUpdateDto } from '../dtos/folders-update.dto';
+import { SearchDto } from '../dtos/search.dto';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -36,6 +37,15 @@ export class FoldersController {
   @Get('')
   list(@Query() dto: FoldersListDto, @ExtractUser() user: UserEntity) {
     return this.foldersService.getList(dto, user.id);
+  }
+
+  @ApiOperation({
+    summary: 'Search folders by name across the entire data room',
+  })
+  @ApiOkResponse({ description: 'Matching folders returned successfully' })
+  @Get('search')
+  search(@Query() dto: SearchDto, @ExtractUser() user: UserEntity) {
+    return this.foldersService.search(dto, user.id);
   }
 
   @ApiOperation({ summary: 'Get a folder by ID' })

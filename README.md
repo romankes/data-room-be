@@ -28,20 +28,40 @@
 ## Project setup
 
 ```bash
-$ pnpm install
+npm install
+```
+
+## Local database
+
+PostgreSQL runs in Docker and stores its data in the persistent
+`postgres_data` volume. Make sure your `.env` contains the same connection
+string as `.env.example` (`localhost:5433`), then start the database and
+synchronize the Prisma schema:
+
+```bash
+npm run db:up
+npm run db:push
+```
+
+Useful commands:
+
+```bash
+npm run db:logs # follow PostgreSQL logs
+npm run db:down # stop containers and keep database data
+npm run db:generate # regenerate Prisma Client
 ```
 
 ## Compile and run the project
 
 ```bash
 # development
-$ pnpm run start
+npm run start
 
 # watch mode
-$ pnpm run start:dev
+npm run start:dev
 
 # production mode
-$ pnpm run start:prod
+npm run start:prod
 ```
 
 ## API documentation
@@ -50,20 +70,147 @@ With the application running, Swagger UI is available at
 `http://localhost:3000/api/docs`. The OpenAPI JSON document is available at
 `http://localhost:3000/api/docs-json`.
 
+## Data-room search
+
+Search ignores the folder hierarchy and only returns resources owned by the
+authenticated user. Matching is case-insensitive and checks whether the name
+contains the supplied query:
+
+- `GET /folders/search?query=contract` — search all folders.
+- `GET /files/search?query=contract` — search all files.
+
+The `query` parameter is required, trimmed, and limited to 255 characters.
+
+## PDF storage and uploads
+
+PDFs are stored in a private Cloudflare R2 bucket. The browser uploads directly
+to R2 with a short-lived presigned URL, so file contents do not pass through the
+NestJS/Vercel function.
+
+Create an R2 bucket and an S3 API token with Object Read & Write access for that
+bucket, then configure the `R2_*` values from `.env.example`. Keep the bucket
+private. In the bucket CORS settings, allow every frontend origin that will use
+the API (replace the example production origin):
+
+```json
+[
+  {
+    "AllowedOrigins": [
+      "http://localhost:5173",
+      "https://your-frontend.vercel.app"
+    ],
+    "AllowedMethods": ["PUT", "GET", "HEAD"],
+    "AllowedHeaders": ["Content-Type"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+Add an Object Lifecycle Rule for the `uploads/` prefix that expires objects
+after one day. Completed files are moved to `files/`, while abandoned temporary
+uploads are cleaned automatically. See the
+[Cloudflare lifecycle documentation](https://developers.cloudflare.com/r2/buckets/object-lifecycles/).
+
+Upload lifecycle:
+
+1. `POST /files/upload-url` returns an `uploadId`, the direct R2 `upload`, and
+   `maxFileSizeBytes`. No `File` entity is created yet.
+2. `PUT upload.url` with the raw PDF body and the exact headers returned in
+   `upload.headers`.
+3. `POST /files` with `uploadId`, `name`, exact `size`, and an optional
+   `folderId`. The API checks content type, size, and PDF magic bytes, moves the
+   object out of the temporary prefix, and creates the `File` entity. If the
+   name already exists at that folder level, the API adds the first available
+   numeric suffix (for example, `contract (1).pdf`).
+4. `GET /files/:id/download` returns a short-lived private download URL.
+
+Browser example:
+
+```ts
+const initResponse = await fetch(`${apiUrl}/files/upload-url`, {
+  method: 'POST',
+  credentials: 'include',
+});
+const { uploadId, upload, maxFileSizeBytes } = await initResponse.json();
+
+if (pdf.size > maxFileSizeBytes) throw new Error('PDF is too large');
+
+await fetch(upload.url, {
+  method: upload.method,
+  headers: upload.headers,
+  body: pdf,
+});
+
+const fileResponse = await fetch(`${apiUrl}/files`, {
+  method: 'POST',
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    uploadId,
+    name: pdf.name,
+    size: pdf.size,
+    folderId,
+  }),
+});
+const file = await fileResponse.json();
+```
+
+The default maximum is 50 MiB and presigned URLs expire after 15 minutes. Both
+are configurable through `.env`. Deleting a file or a folder also deletes its
+stored R2 objects.
+
+## Authentication
+
+- `POST /auth/register` — register with email and password.
+- `POST /auth/login` — log in with email and password.
+- `GET /auth/google` — start Google OAuth login.
+- `POST /auth/logout` — clear the authentication cookie.
+
+Email/password and Google login both create the same HTTP-only JWT cookie.
+
+JWT tokens use `HS256`. Set a long random secret in `.env`:
+
+```bash
+openssl rand -base64 48
+```
+
+```env
+JWT_SECRET=generated-value
+```
+
+Use tracked Prisma migrations instead of `db push` for production databases.
+
 ## Run tests
 
 ```bash
 # unit tests
-$ pnpm run test
+npm run test
 
 # e2e tests
-$ pnpm run test:e2e
+npm run test:e2e
 
 # test coverage
-$ pnpm run test:cov
+npm run test:cov
 ```
 
 ## Deployment
+
+For a new production database, apply the tracked schema before starting the
+application:
+
+```bash
+npm run db:migrate:deploy
+```
+
+If an existing database was previously created with `prisma db push`, first
+back it up and verify that it matches the pre-upload schema. Then baseline it
+and apply only the upload migration:
+
+```bash
+npx prisma migrate resolve --applied 20260818000000_init
+npm run db:migrate:deploy
+```
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
 

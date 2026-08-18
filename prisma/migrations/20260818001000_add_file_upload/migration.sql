@@ -1,0 +1,10 @@
+-- AlterTable
+ALTER TABLE "File"
+ADD COLUMN "storageKey" TEXT,
+ADD COLUMN "mimeType" TEXT NOT NULL DEFAULT 'application/pdf',
+ADD COLUMN "size" INTEGER,
+ADD COLUMN "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateIndex
+CREATE UNIQUE INDEX "File_storageKey_key" ON "File"("storageKey");

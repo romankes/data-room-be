@@ -3,10 +3,15 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { FoldersListDto } from '../dtos/folders-list.dto';
 import { FoldersCreateDto } from '../dtos/folders-create.dto';
 import { FoldersUpdateDto } from '../dtos/folders-update.dto';
+import { SearchDto } from '../dtos/search.dto';
+import { FileStorageService } from './file-storage.service';
 
 @Injectable()
 export class FoldersService {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly fileStorageService: FileStorageService,
+  ) {}
 
   async getById(id: string, userId: string) {
     const data = await this.prismaService.folder.findUniqueOrThrow({
@@ -15,7 +20,9 @@ export class FoldersService {
         userId,
       },
       include: {
-        files: true,
+        files: {
+          omit: { userId: true, folderId: true, storageKey: true },
+        },
         folders: true,
         folder: true,
       },
@@ -47,7 +54,9 @@ export class FoldersService {
         userId,
       },
       include: {
-        files: true,
+        files: {
+          omit: { userId: true, folderId: true, storageKey: true },
+        },
         folders: true,
       },
       omit: {
@@ -60,9 +69,44 @@ export class FoldersService {
   }
 
   async delete(id: string, userId: string) {
-    await this.prismaService.folder.delete({
-      where: { id, userId },
-    });
+    const storageKeys = await this.prismaService.$transaction(
+      async (transaction) => {
+        await transaction.folder.findUniqueOrThrow({
+          where: { id, userId },
+          select: { id: true },
+        });
+
+        const folderIds = [id];
+        let currentLevel = [id];
+
+        while (currentLevel.length > 0) {
+          const children = await transaction.folder.findMany({
+            where: { userId, folderId: { in: currentLevel } },
+            select: { id: true },
+          });
+          currentLevel = children.map((folder) => folder.id);
+          folderIds.push(...currentLevel);
+        }
+
+        const files = await transaction.file.findMany({
+          where: { userId, folderId: { in: folderIds } },
+          select: { storageKey: true },
+        });
+
+        await transaction.folder.delete({
+          where: { id, userId },
+        });
+
+        return files.flatMap((file) =>
+          file.storageKey ? [file.storageKey as string] : [],
+        );
+      },
+      {
+        isolationLevel: 'Serializable',
+      },
+    );
+
+    await this.fileStorageService.deleteMany(storageKeys);
   }
 
   async update(id: string, dto: FoldersUpdateDto, userId: string) {
@@ -89,7 +133,9 @@ export class FoldersService {
         name: dto.name,
       },
       include: {
-        files: true,
+        files: {
+          omit: { userId: true, folderId: true, storageKey: true },
+        },
         folders: true,
       },
       omit: {
@@ -104,11 +150,13 @@ export class FoldersService {
   async getList(dto: FoldersListDto, userId: string) {
     const data = await this.prismaService.folder.findMany({
       where: {
-        folderId: dto.folderId,
+        folderId: dto.folderId ?? null,
         userId,
       },
       include: {
-        files: true,
+        files: {
+          omit: { userId: true, folderId: true, storageKey: true },
+        },
         folders: true,
       },
       omit: {
@@ -118,5 +166,26 @@ export class FoldersService {
     });
 
     return data;
+  }
+
+  async search(dto: SearchDto, userId: string) {
+    return this.prismaService.folder.findMany({
+      where: {
+        userId,
+        name: {
+          contains: dto.query,
+          mode: 'insensitive',
+        },
+      },
+      include: {
+        folder: {
+          omit: { userId: true },
+        },
+      },
+      omit: {
+        userId: true,
+      },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
   }
 }

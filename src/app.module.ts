@@ -27,7 +27,7 @@ import { DataRoomModule } from './data-room/data-room.module';
 
         return {
           secret: jwt.secret,
-          signOptions: { algorithm: 'RS256', expiresIn: '30d' },
+          signOptions: { expiresIn: '30d' },
         };
       },
     }),
