@@ -6,10 +6,18 @@ import { FilesService } from './services/files.service';
 import { ConfigModule } from '@nestjs/config';
 import { StorageConfigFactory } from '../config/storage.config';
 import { FileStorageService } from './services/file-storage.service';
+import { SharesController } from './controllers/shares.controller';
+import { PublicSharesController } from './controllers/public-shares.controller';
+import { SharesService } from './services/shares.service';
 
 @Module({
   imports: [ConfigModule.forFeature(StorageConfigFactory)],
-  controllers: [FoldersController, FilesController],
-  providers: [FoldersService, FilesService, FileStorageService],
+  controllers: [
+    FoldersController,
+    FilesController,
+    SharesController,
+    PublicSharesController,
+  ],
+  providers: [FoldersService, FilesService, SharesService, FileStorageService],
 })
 export class DataRoomModule {}

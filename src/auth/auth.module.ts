@@ -8,6 +8,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { JwtService } from './services/jwt.service';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
+import { PasswordService } from './services/password.service';
 
 @Module({
   providers: [
@@ -17,6 +18,7 @@ import { GoogleAuthGuard } from './guards/google-auth.guard';
     GoogleStrategy,
     GoogleAuthGuard,
     JwtService,
+    PasswordService,
     {
       provide: APP_GUARD,
       useClass: SessionGuard,

@@ -6,6 +6,8 @@ import { FilesUpdateDto } from '../dtos/files-update.dto';
 import { FilesListDto } from '../dtos/files-list.dto';
 import { SearchDto } from '../dtos/search.dto';
 import { FileStorageService } from './file-storage.service';
+import { mapFile } from '../../mappers/file.mapper';
+import { FilesMoveDto } from '../dtos/files-move.dto';
 
 @Injectable()
 export class FilesService {
@@ -86,7 +88,7 @@ export class FilesService {
       },
     });
 
-    return data;
+    return mapFile(data);
   }
 
   async createUpload(userId: string) {
@@ -111,9 +113,9 @@ export class FilesService {
 
     const temporaryStorageKey = this.getTemporaryStorageKey(
       userId,
-      dto.uploadId,
+      dto.uploadId as string,
     );
-    const storageKey = this.getStorageKey(userId, dto.uploadId);
+    const storageKey = this.getStorageKey(userId, dto.uploadId as string);
     const usedUpload = await this.prismaService.file.findUnique({
       where: { storageKey },
       select: { id: true },
@@ -205,13 +207,13 @@ export class FilesService {
       );
     }
 
-    return data;
+    return mapFile(data);
   }
 
   async delete(id: string, userId: string) {
     const file = await this.getOwnedFile(id, userId);
     if (file.storageKey) {
-      await this.fileStorageService.delete(file.storageKey);
+      await this.fileStorageService.delete(file.storageKey as string);
     }
     await this.prismaService.file.delete({
       where: { id, userId },
@@ -252,7 +254,55 @@ export class FilesService {
       },
     });
 
-    return data;
+    return mapFile(data);
+  }
+
+  async move(id: string, dto: FilesMoveDto, userId: string) {
+    const file = await this.getOwnedFile(id, userId);
+
+    if (file.folderId === dto.folderId) {
+      return this.getById(id, userId);
+    }
+
+    if (dto.folderId) {
+      const folder = await this.prismaService.folder.findUnique({
+        where: { id: dto.folderId, userId },
+        select: { id: true },
+      });
+
+      if (!folder) {
+        throw new BadRequestException('Destination folder does not exist');
+      }
+    }
+
+    const conflictingFile = await this.prismaService.file.findFirst({
+      where: {
+        id: { not: id },
+        folderId: dto.folderId,
+        name: file.name,
+        userId,
+      },
+      select: { id: true },
+    });
+
+    if (conflictingFile) {
+      throw new BadRequestException(
+        'A file with this name already exists in the destination',
+      );
+    }
+
+    const data = await this.prismaService.file.update({
+      where: { id, userId },
+      data: { folderId: dto.folderId },
+      include: { folder: true },
+      omit: {
+        userId: true,
+        folderId: true,
+        storageKey: true,
+      },
+    });
+
+    return mapFile(data);
   }
 
   async getList(dto: FilesListDto, userId: string) {
@@ -271,11 +321,11 @@ export class FilesService {
       },
     });
 
-    return data;
+    return data.map((file) => mapFile(file));
   }
 
   async search(dto: SearchDto, userId: string) {
-    return this.prismaService.file.findMany({
+    const data = await this.prismaService.file.findMany({
       where: {
         userId,
         name: {
@@ -295,6 +345,8 @@ export class FilesService {
       },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
+
+    return data.map((file) => mapFile(file));
   }
 
   async getDownloadUrl(id: string, userId: string) {
@@ -304,7 +356,7 @@ export class FilesService {
     }
 
     return this.fileStorageService.createDownloadUrl(
-      file.storageKey,
+      file.storageKey as string,
       file.name,
     );
   }

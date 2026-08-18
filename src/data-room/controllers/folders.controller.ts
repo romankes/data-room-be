@@ -24,6 +24,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { FolderEntity } from '../entities/folder.entity';
 
 @ApiTags('Folders')
 @ApiBearerAuth()
@@ -33,7 +34,10 @@ export class FoldersController {
   constructor(private readonly foldersService: FoldersService) {}
 
   @ApiOperation({ summary: 'List folders' })
-  @ApiOkResponse({ description: 'Folders returned successfully' })
+  @ApiOkResponse({
+    description: 'Folders returned successfully',
+    type: [FolderEntity],
+  })
   @Get('')
   list(@Query() dto: FoldersListDto, @ExtractUser() user: UserEntity) {
     return this.foldersService.getList(dto, user.id);
@@ -42,7 +46,10 @@ export class FoldersController {
   @ApiOperation({
     summary: 'Search folders by name across the entire data room',
   })
-  @ApiOkResponse({ description: 'Matching folders returned successfully' })
+  @ApiOkResponse({
+    description: 'Matching folders returned successfully',
+    type: [FolderEntity],
+  })
   @Get('search')
   search(@Query() dto: SearchDto, @ExtractUser() user: UserEntity) {
     return this.foldersService.search(dto, user.id);
@@ -50,14 +57,20 @@ export class FoldersController {
 
   @ApiOperation({ summary: 'Get a folder by ID' })
   @ApiParam({ name: 'id', format: 'uuid' })
-  @ApiOkResponse({ description: 'Folder returned successfully' })
+  @ApiOkResponse({
+    description: 'Folder returned successfully',
+    type: FolderEntity,
+  })
   @Get(':id')
   byId(@Param('id') id: string, @ExtractUser() user: UserEntity) {
     return this.foldersService.getById(id, user.id);
   }
 
   @ApiOperation({ summary: 'Create a folder' })
-  @ApiCreatedResponse({ description: 'Folder created successfully' })
+  @ApiCreatedResponse({
+    description: 'Folder created successfully',
+    type: FolderEntity,
+  })
   @Post('')
   create(@Body() dto: FoldersCreateDto, @ExtractUser() user: UserEntity) {
     return this.foldersService.create(dto, user.id);
@@ -65,7 +78,10 @@ export class FoldersController {
 
   @ApiOperation({ summary: 'Update a folder' })
   @ApiParam({ name: 'id', format: 'uuid' })
-  @ApiOkResponse({ description: 'Folder updated successfully' })
+  @ApiOkResponse({
+    description: 'Folder updated successfully',
+    type: FolderEntity,
+  })
   @Patch(':id')
   update(
     @Body() dto: FoldersUpdateDto,

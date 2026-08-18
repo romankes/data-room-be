@@ -125,6 +125,11 @@ Upload lifecycle:
    numeric suffix (for example, `contract (1).pdf`).
 4. `GET /files/:id/download` returns a short-lived private download URL.
 
+Move an existing file with `PATCH /files/:id/move`. Send a destination folder
+as `{ "folderId": "<uuid>" }`, or move it to the data-room root with
+`{ "folderId": null }`. The destination must belong to the authenticated user
+and must not already contain a file with the same name.
+
 Browser example:
 
 ```ts
@@ -159,6 +164,64 @@ const file = await fileResponse.json();
 The default maximum is 50 MiB and presigned URLs expire after 15 minutes. Both
 are configurable through `.env`. Deleting a file or a folder also deletes its
 stored R2 objects.
+
+## Sharing
+
+Shares can expose the entire data room (`ALL`), a folder and its descendants
+(`FOLDER`), or one PDF (`FILE`). A share is either public through a secret token
+or restricted to recipient emails. Recipients do not need an account when the
+share is created: after registering with the same normalized email, the share
+automatically appears in `GET /shares/received`. An optional future `expiresAt`
+timestamp is checked together with the revocation state on every access.
+
+Authenticated endpoints:
+
+- `POST /shares` — create a `PUBLIC` or `AUTHORIZED` share.
+- `GET /shares` — list shares created by the current user, including revoked
+  ones.
+- `GET /shares/received` — list active authorized shares received by the
+  current user.
+- `POST /shares/:id/public-token` — issue a replacement token for an active
+  owned public share. The previous token stops working.
+- `GET /shares/:id/content?folderId=...` — browse an accessible share. Omit
+  `folderId` to open its root.
+- `GET /shares/:id/files/:fileId/download` — get a short-lived download URL for
+  a PDF within the share.
+- `DELETE /shares/:id` — revoke an owned share.
+
+Public endpoints do not require authentication:
+
+- `GET /public/shares/:token/content?folderId=...`
+- `GET /public/shares/:token/files/:fileId/download`
+
+Example public folder share:
+
+```json
+{
+  "mode": "PUBLIC",
+  "targetType": "FOLDER",
+  "folderId": "c05e2953-cbf2-4835-a88a-e1e0f7623190",
+  "expiresAt": "2026-09-01T12:00:00.000Z"
+}
+```
+
+Example authorized file share:
+
+```json
+{
+  "mode": "AUTHORIZED",
+  "targetType": "FILE",
+  "fileId": "07a6ce96-855a-4b20-ad70-e3e30fd41243",
+  "recipientEmails": ["viewer@example.com"]
+}
+```
+
+For a public share, `POST /shares` returns `publicToken` at creation. The
+database stores only its SHA-256 hash, so a lost token cannot be recovered.
+The owner can call `POST /shares/:id/public-token` to receive a replacement and
+copy the public URL again; issuing a replacement invalidates the previous
+token. Content responses never expose storage object keys; downloads always
+use short-lived presigned URLs.
 
 ## Authentication
 
@@ -195,6 +258,18 @@ npm run test:cov
 ```
 
 ## Deployment
+
+Vercel builds the production container from `Dockerfile.vercel`. Configure the
+variables from `.env.example` in the Vercel project, then deploy from the
+repository root:
+
+```bash
+vercel deploy --prod
+```
+
+The application already listens on Vercel's runtime-provided `PORT`. Run
+database migrations as a separate deployment step; do not run them in the
+container startup command because multiple instances can start concurrently.
 
 For a new production database, apply the tracked schema before starting the
 application:

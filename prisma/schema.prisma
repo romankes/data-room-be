@@ -132,12 +132,15 @@ model Share {
 }
 
 model ShareRecipient {
-  shareId String @db.Uuid()
-  userId  String @db.Uuid()
+  shareId String  @db.Uuid()
+  email   String
+  userId  String? @db.Uuid()
 
   share Share @relation(fields: [shareId], references: [id], onDelete: Cascade)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Set for users who were registered when the share was created. Email is
+  // still the access identity so pending recipients work after registration.
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
@@ -145,7 +148,8 @@ model ShareRecipient {
   // without revoking the entire Share
   revokedAt DateTime?
 
-  @@id([shareId, userId])
+  @@id([shareId, email])
   @@index([userId])
   @@index([userId, revokedAt])
+  @@index([email, revokedAt])
 }

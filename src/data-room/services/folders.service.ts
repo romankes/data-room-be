@@ -5,6 +5,7 @@ import { FoldersCreateDto } from '../dtos/folders-create.dto';
 import { FoldersUpdateDto } from '../dtos/folders-update.dto';
 import { SearchDto } from '../dtos/search.dto';
 import { FileStorageService } from './file-storage.service';
+import { mapFolder } from '../../mappers/folder.mapper';
 
 @Injectable()
 export class FoldersService {
@@ -31,7 +32,7 @@ export class FoldersService {
       },
     });
 
-    return data;
+    return mapFolder(data);
   }
 
   async create(dto: FoldersCreateDto, userId: string) {
@@ -65,7 +66,7 @@ export class FoldersService {
       },
     });
 
-    return data;
+    return mapFolder(data);
   }
 
   async delete(id: string, userId: string) {
@@ -144,7 +145,7 @@ export class FoldersService {
       },
     });
 
-    return data;
+    return mapFolder(data);
   }
 
   async getList(dto: FoldersListDto, userId: string) {
@@ -165,11 +166,11 @@ export class FoldersService {
       },
     });
 
-    return data;
+    return data.map((folder) => mapFolder(folder));
   }
 
   async search(dto: SearchDto, userId: string) {
-    return this.prismaService.folder.findMany({
+    const data = await this.prismaService.folder.findMany({
       where: {
         userId,
         name: {
@@ -187,5 +188,7 @@ export class FoldersService {
       },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     });
+
+    return data.map((folder) => mapFolder(folder));
   }
 }

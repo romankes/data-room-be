@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { mapUser } from '../../mappers/user.mapper';
 
 @Injectable()
 export class UsersService {
@@ -14,7 +15,11 @@ export class UsersService {
       },
     });
 
-    return user;
+    if (!user) {
+      return null;
+    }
+
+    return mapUser(user);
   }
 
   async getCredentialsByEmail(email: string) {
@@ -29,32 +34,48 @@ export class UsersService {
   }
 
   async createWithPassword(email: string, passwordHash: string) {
-    return this.prismaService.user.create({
-      data: {
-        email,
-        passwordHash,
-      },
-      select: {
-        id: true,
-        email: true,
-      },
+    return this.prismaService.$transaction(async (transaction) => {
+      const user = await transaction.user.create({
+        data: {
+          email,
+          passwordHash,
+        },
+        select: {
+          id: true,
+          email: true,
+        },
+      });
+
+      await transaction.shareRecipient.updateMany({
+        where: { email: user.email, userId: null },
+        data: { userId: user.id },
+      });
+
+      return mapUser(user);
     });
   }
 
   async findOrCreate(email: string) {
     const normalizedEmail = email.trim().toLowerCase();
-    const user = await this.prismaService.user.upsert({
-      where: { email: normalizedEmail },
-      create: {
-        email: normalizedEmail,
-      },
-      update: {},
-      select: {
-        id: true,
-        email: true,
-      },
-    });
+    return this.prismaService.$transaction(async (transaction) => {
+      const user = await transaction.user.upsert({
+        where: { email: normalizedEmail },
+        create: {
+          email: normalizedEmail,
+        },
+        update: {},
+        select: {
+          id: true,
+          email: true,
+        },
+      });
 
-    return user;
+      await transaction.shareRecipient.updateMany({
+        where: { email: user.email, userId: null },
+        data: { userId: user.id },
+      });
+
+      return mapUser(user);
+    });
   }
 }

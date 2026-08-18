@@ -3,20 +3,13 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import {
-  randomBytes,
-  scrypt as nodeScrypt,
-  timingSafeEqual,
-} from 'node:crypto';
-import { promisify } from 'node:util';
+
 import { EmailAuthDto } from '../dtos/email-auth.dto';
 import { UserEntity } from '../entities/user.entity';
+import { mapUser } from '../../mappers/user.mapper';
 import { JwtService } from './jwt.service';
 import { UsersService } from './users.service';
-
-const scrypt = promisify(nodeScrypt);
-const PASSWORD_HASH_KEY_LENGTH = 64;
-const PASSWORD_HASH_PREFIX = 'scrypt';
+import { PasswordService } from './password.service';
 
 export interface AuthResult {
   accessToken: string;
@@ -28,6 +21,7 @@ export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
+    private readonly passwordService: PasswordService,
   ) {}
 
   createAccessToken(user: Pick<UserEntity, 'id'>): Promise<string> {
@@ -42,7 +36,7 @@ export class AuthService {
       throw new ConflictException('User with this email already exists');
     }
 
-    const passwordHash = await this.hashPassword(dto.password);
+    const passwordHash = await this.passwordService.hash(dto.password);
 
     try {
       const user = await this.usersService.createWithPassword(
@@ -70,15 +64,12 @@ export class AuthService {
 
     if (
       !user?.passwordHash ||
-      !(await this.verifyPassword(dto.password, user.passwordHash))
+      !(await this.passwordService.verify(dto.password, user.passwordHash))
     ) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const publicUser: UserEntity = {
-      id: user.id,
-      email: user.email,
-    };
+    const publicUser = mapUser(user);
 
     return {
       user: publicUser,
@@ -88,46 +79,6 @@ export class AuthService {
 
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
-  }
-
-  private async hashPassword(password: string): Promise<string> {
-    const salt = randomBytes(16);
-    const derivedKey = (await scrypt(
-      password,
-      salt,
-      PASSWORD_HASH_KEY_LENGTH,
-    )) as Buffer;
-
-    return [
-      PASSWORD_HASH_PREFIX,
-      salt.toString('hex'),
-      derivedKey.toString('hex'),
-    ].join(':');
-  }
-
-  private async verifyPassword(
-    password: string,
-    storedHash: string,
-  ): Promise<boolean> {
-    const [prefix, saltHex, hashHex] = storedHash.split(':');
-
-    if (prefix !== PASSWORD_HASH_PREFIX || !saltHex || !hashHex) {
-      return false;
-    }
-
-    const storedKey = Buffer.from(hashHex, 'hex');
-
-    if (storedKey.length !== PASSWORD_HASH_KEY_LENGTH) {
-      return false;
-    }
-
-    const derivedKey = (await scrypt(
-      password,
-      Buffer.from(saltHex, 'hex'),
-      PASSWORD_HASH_KEY_LENGTH,
-    )) as Buffer;
-
-    return timingSafeEqual(storedKey, derivedKey);
   }
 
   private isUniqueConstraintError(error: unknown): boolean {
