@@ -16,7 +16,7 @@ COPY prisma ./prisma
 COPY src ./src
 
 RUN npm run db:generate && npm run build
-RUN npm prune --omit=dev --ignore-scripts
+RUN npm prune --omit=dev --omit=optional --omit=peer --ignore-scripts
 
 FROM base AS runtime
 
