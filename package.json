@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "nest build",
+    "postinstall": "prisma generate",
     "db:up": "docker compose up -d --wait postgres",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",

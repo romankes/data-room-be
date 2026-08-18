@@ -9,6 +9,8 @@ export default defineConfig({
     path: 'prisma/migrations',
   },
   datasource: {
-    url: process.env['DATABASE_URL'],
+    // Use a direct connection for schema changes and a pooled runtime URL in
+    // serverless environments. Local development can use DATABASE_URL alone.
+    url: process.env['DIRECT_URL'] ?? process.env['DATABASE_URL'],
   },
 });

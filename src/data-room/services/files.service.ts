@@ -113,9 +113,9 @@ export class FilesService {
 
     const temporaryStorageKey = this.getTemporaryStorageKey(
       userId,
-      dto.uploadId as string,
+      dto.uploadId,
     );
-    const storageKey = this.getStorageKey(userId, dto.uploadId as string);
+    const storageKey = this.getStorageKey(userId, dto.uploadId);
     const usedUpload = await this.prismaService.file.findUnique({
       where: { storageKey },
       select: { id: true },
@@ -165,7 +165,7 @@ export class FilesService {
             name,
             folderId: dto.folderId,
             userId,
-            size: dto.size as number,
+            size: dto.size,
             storageKey,
           },
           include: {
@@ -213,7 +213,7 @@ export class FilesService {
   async delete(id: string, userId: string) {
     const file = await this.getOwnedFile(id, userId);
     if (file.storageKey) {
-      await this.fileStorageService.delete(file.storageKey as string);
+      await this.fileStorageService.delete(file.storageKey);
     }
     await this.prismaService.file.delete({
       where: { id, userId },
@@ -356,7 +356,7 @@ export class FilesService {
     }
 
     return this.fileStorageService.createDownloadUrl(
-      file.storageKey as string,
+      file.storageKey,
       file.name,
     );
   }

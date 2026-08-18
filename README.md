@@ -169,6 +169,68 @@ The API is available at `http://localhost:3000` by default:
 - Swagger UI: `http://localhost:3000/api/docs`
 - OpenAPI JSON: `http://localhost:3000/api/docs-json`
 
+## Vercel deployment
+
+Vercel detects `Dockerfile.vercel` and deploys the API as a container-backed
+Node.js Function on Fluid compute. The image explicitly generates the ignored
+Prisma Client before compiling the NestJS application. The `postinstall` script
+also keeps non-container clean installs deployment-ready. `vercel.json` places
+the Function in Frankfurt (`fra1`) next to the recommended database region.
+
+### 1. Provision production services
+
+- Create a managed PostgreSQL database. Prefer a serverless provider with a
+  free tier and connection pooling, such as Prisma Postgres or Neon.
+- Keep Cloudflare R2 private and configure its CORS policy to allow the
+  production frontend origin to send `PUT` requests with the `Content-Type`
+  header.
+- Use stable custom domains where possible, for example `app.example.com` for
+  the frontend and `api.example.com` for this API. This keeps the current
+  `SameSite=Lax` authentication cookie working across the two subdomains.
+
+### 2. Configure Vercel environment variables
+
+Add these values to both Production and, when needed, Preview environments:
+
+```text
+DATABASE_URL                  pooled PostgreSQL runtime URL
+DIRECT_URL                    direct PostgreSQL migration URL
+CORS_ALLOWED_ORIGINS          exact comma-separated frontend origins
+JWT_SECRET                    output of: openssl rand -base64 48
+R2_ACCOUNT_ID                 Cloudflare account ID
+R2_ACCESS_KEY_ID              R2 S3 API access key
+R2_SECRET_ACCESS_KEY          R2 S3 API secret
+R2_BUCKET                     private bucket name
+MAX_PDF_SIZE_BYTES            optional; defaults to 52428800
+R2_UPLOAD_URL_TTL_SECONDS     optional; defaults to 900
+R2_DOWNLOAD_URL_TTL_SECONDS   optional; defaults to 900
+GOOGLE_CLIENT_ID              Google OAuth client ID
+GOOGLE_CLIENT_SECRET          Google OAuth client secret
+GOOGLE_CALLBACK_URL           https://api.example.com/auth/google/callback
+GOOGLE_SUCCESS_REDIRECT_URL   frontend URL after successful authentication
+```
+
+Do not configure `PORT` or the local `POSTGRES_*` Docker variables in Vercel.
+Use separate databases and buckets for Preview and Production instead of
+allowing preview deployments to modify production data.
+
+### 3. Apply migrations and deploy
+
+After importing the Git repository into Vercel and adding the environment
+variables, link the local directory and apply the tracked migrations:
+
+```bash
+npx vercel@latest login
+npx vercel@latest link
+npx vercel@latest env run -e production -- npm run db:migrate:deploy
+npx vercel@latest deploy --prod
+```
+
+Do not run migrations from every Vercel build because concurrent preview and
+production deployments can race. After deployment, verify `/api/docs` and
+`/api/docs-json`, then update the Google OAuth authorized redirect URI to the
+final API domain.
+
 ## Useful commands
 
 ```bash

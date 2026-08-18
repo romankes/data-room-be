@@ -99,7 +99,7 @@ export class FoldersService {
         });
 
         return files.flatMap((file) =>
-          file.storageKey ? [file.storageKey as string] : [],
+          file.storageKey ? [file.storageKey] : [],
         );
       },
       {
